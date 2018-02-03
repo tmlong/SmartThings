@@ -19,7 +19,6 @@ definition(
     author: "Todd Long",
     description: "Notify Ecobee about presence.",
     category: "SmartThings Labs",
-    parent: "smartthings:Ecobee (Connect)",
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/Partner/ecobee.png",
     iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Partner/ecobee@2x.png",
     iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Partner/ecobee@2x.png",
@@ -27,15 +26,79 @@ definition(
     pausable: false)
 
 preferences {
-    page(name: "mainPage")
+    page(name: "auth", title: "ecobee", nextPage: "", content: "authPage", uninstall: true, install: true)
 }
 
-def mainPage() {
-    dynamicPage(name: "mainPage", install: true, uninstall: true) {
-        section("Do you want to be notified?") {
-            input "presenceAware", "bool", title: "Send a push notification"
+mappings {
+    path("/oauth/initialize") { action: [GET: "oauthInitUrl"] }
+    path("/oauth/callback") { action: [GET: "callback"] }
+}
+
+def authPage() {
+    log.debug "authPage()"
+
+    if (!atomicState.accessToken) { //this is to access token for 3rd party to make a call to connect app
+        atomicState.accessToken = createAccessToken()
+    }
+
+    def description
+    def uninstallAllowed = false
+    def oauthTokenProvided = false
+
+    if (atomicState.authToken) {
+        description = "You are connected."
+        uninstallAllowed = true
+        oauthTokenProvided = true
+    } else {
+        description = "Click to enter Ecobee Credentials"
+    }
+
+    def redirectUrl = buildRedirectUrl
+    log.debug "RedirectUrl = ${redirectUrl}"
+    // get rid of next button until the user is actually auth'd
+    if (!oauthTokenProvided) {
+        return dynamicPage(name: "auth", title: "Login", nextPage: "", uninstall:uninstallAllowed) {
+            section() {
+                paragraph "Tap below to log in to the ecobee service and authorize SmartThings access. Be sure to scroll down on page 2 and press the 'Allow' button."
+                href url:redirectUrl, style:"embedded", required:true, title:"ecobee", description:description
+            }
+        }
+    } else {
+        def stats = getEcobeeThermostats()
+        log.debug "thermostat list: $stats"
+        log.debug "sensor list: ${sensorsDiscovered()}"
+        return dynamicPage(name: "auth", title: "Select Your Thermostats", uninstall: true) {
+            section("") {
+                paragraph "Tap below to see the list of ecobee thermostats available in your ecobee account and select the ones you want to connect to SmartThings."
+                input(name: "thermostats", title:"Select Your Thermostats", type: "enum", required:true, multiple:true, description: "Tap to choose", metadata:[values:stats])
+            }
+
+            def options = sensorsDiscovered() ?: []
+            def numFound = options.size() ?: 0
+            if (numFound > 0)  {
+                section("") {
+                    paragraph "Tap below to see the list of ecobee sensors available in your ecobee account and select the ones you want to connect to SmartThings."
+                    input(name: "ecobeesensors", title: "Select Ecobee Sensors ({{numFound}} found)", messageArgs: [numFound: numFound], type: "enum", required:false, description: "Tap to choose", multiple:true, options:options)
+                }
+            }
         }
     }
+}
+
+def oauthInitUrl() {
+    log.debug "oauthInitUrl with callback: ${callbackUrl}"
+
+    atomicState.oauthInitState = UUID.randomUUID().toString()
+
+    def oauthParams = [
+        response_type: "code",
+        scope: "smartRead,smartWrite",
+        client_id: smartThingsClientId,
+        state: atomicState.oauthInitState,
+        redirect_uri: callbackUrl
+    ]
+
+    redirect(location: "${apiEndpoint}/authorize?${toQueryString(oauthParams)}")
 }
 
 def installed() {
@@ -52,7 +115,7 @@ def updated() {
 }
 
 def initialize() {
-    subscribe(location, "mode", modeChangeHandler)
+//    subscribe(location, "mode", modeChangeHandler)
 }
 
 def modeChangeHandler(evt) {
