@@ -27,19 +27,37 @@ definition(
     pausable: false)
 
 preferences {
-    page(name: "authInit")
+    page(name: "doInit")
 }
 
-def authInit() {
-    log.debug "authInit()"
+def doInit() {
+    log.debug "doInit()"
 
     def stats = parent.getEcobeeThermostats()
-    log.debug "Available thermostats: ${stats}"
+    log.debug "Ecobee thermostats: ${stats}"
 
-    return dynamicPage(name: "authInit", title: "Select Your Thermostats", install: true, uninstall: state.init) {
+    return dynamicPage(name: "doInit", title: "Presence Configuration", install: true, uninstall: state.init) {
         section {
             paragraph "Tap below to see the list of ecobee thermostats available in your ecobee account and select the ones you want to connect to SmartThings."
-            input(name: "thermostats", title: "Select Your Thermostats", type: "enum", required: true, multiple: true, description: "Tap to choose", metadata: [values:stats])
+            input(name: "thermostats", title: "Select Your Thermostats", type: "enum", required: true, multiple: true, description: "Tap to choose", metadata: [values: stats])
+        }
+
+        // holdType: dateTime, nextTransition, indefinite, holdHours
+        def holdTypes = [
+            [ indefinite: "Indefinite" ],
+            [ nextTransition: "Next Transition" ]
+        ]
+
+        section {
+            paragraph "Tap below to see the list of hold types available and select the one you want to use on mode changes."
+            input(name: "holdType", title: "Select Your Hold Type", type: "enum", required: true, multiple: false, description: "Tap to choose", metadata: [values: holdTypes])
+        }
+
+        // TODO map thermostat climates... includeProgram: true
+
+        section {
+            paragraph "Tap below to set whether or not to send an initial presence to the selected thermostats."
+            input(name: "initHold", title: "Send Initial Presence", type: "bool", defaultValue: false)
         }
     }
 }
@@ -47,14 +65,17 @@ def authInit() {
 def installed() {
     log.debug "Installed with settings: ${settings}"
 
-//    initialize()
-
     if (!state.init) {
         state.init = true;
+
+        if (settings.initHold) {
+            modeChangeHandler([value: location.mode])
+        }
     }
 }
 
 def updated() {
+    // prevent updated() from being called twice
     if ((now() - (state.lastUpdated ?: 0)) < 5000) return
 
     state.lastUpdated = now()
@@ -65,7 +86,9 @@ def updated() {
 }
 
 def initialize() {
-    log.debug "Selected thermostats: ${thermostats}"
+    log.debug "initialize()"
+
+    log.debug "parent.atomicState: ${parent.atomicState}"
 
     // unsubscribe from previous events
     unsubscribe()
@@ -75,40 +98,87 @@ def initialize() {
 }
 
 def modeChangeHandler(evt) {
-    log.debug "Handle mode change: ${location.mode}"
+    log.debug "modeChangeHandler() mode: ${evt.value}"
 
-    // away, home, sleep
+    // get the thermostat ids
+    def thermostatIds = getThermostatIdsForSelection(settings.thermostats)
 
-	// holdType: dateTime, nextTransition, indefinite, holdHours
+    // get the mode
+	def mode = evt.value
 
-    def deviceIdsString = getChildDeviceIdsString()
+    // thermostat climate to location mode mapping
+	def climate = [
+        Away: "away",
+        Home: "home",
+        Nap: "home",
+        Night: "sleep"
+    ]
 
-    annoyEcobee(deviceIdsString, location.mode.toLowerCase())
+    holdClimate(thermostatIds, settings.holdType, climate[mode])
 }
 
-def annoyEcobee(deviceId, climate) {
-    log.debug "Annoying ecobee for deviceId: ${deviceId}"
+// @see https://www.ecobee.com/home/developer/api/documentation/v1/functions/SetHold.shtml
+def holdClimate(thermostatIds, holdType, climate) {
+    log.debug "holdClimate() thermostatIds: ${thermostatIds} holdType: ${holdType} climate: ${climate}"
 
+    // define the hold climate payload
     def payload = [
         selection: [
             selectionType: "thermostats",
-            selectionMatch: deviceId,
+            selectionMatch: thermostatIds,
             includeRuntime: true
         ],
         functions: [[
             type: "setHold",
             params: [
-                holdType: "indefinite",
+                holdType: holdType,
                 holdClimateRef: climate
             ]
         ]]
     ]
 
+    // send the hold climate request
     def success = parent.sendCommandToEcobee(payload)
 
-    log.debug "Annoying ecobee was a success? ${success}"
+    log.debug "holdClimate() success? ${success}"
 }
 
-def getChildDeviceIdsString() {
-    return thermostats.collect { it.split(/\./).last() }.join(',')
+def getThermostatIdsForSelection(stats) {
+    return stats.collect { it.split(/\./).last() }.join(',')
+}
+
+def toJson(Map m) {
+    return groovy.json.JsonOutput.toJson(m)
+}
+
+def getApiEndpoint()         { return "https://api.ecobee.com" }
+
+//sendTest([
+//    selection: [
+//        selectionType: "thermostats",
+//        selectionMatch: state.thermostatIds,
+//        includeProgram: true
+//    ]
+//])
+
+def sendTest(Map bodyParams) {
+    def json = toJson(bodyParams)
+    log.debug "json: ${json}"
+    
+    def cmdParams = [
+        uri: apiEndpoint,
+        path: "/1/thermostat",
+        headers: ["Content-Type": "application/json", "Authorization": "Bearer ${parent.atomicState.authToken}"],
+        query: [format: 'json', body: json]
+    ]
+
+    httpGet(cmdParams) { resp ->
+        log.debug "resp.status: ${resp.status}"
+        log.debug "resp.data length: ${resp.data.size()}"
+        for (i = 0; i < resp.data.size(); ) {
+            def data = resp.data.substring(i, i+100)
+            log.debug "data: ${data}"
+            i+=100
+        }
+    }
 }
