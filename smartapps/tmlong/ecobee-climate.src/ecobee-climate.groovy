@@ -1,5 +1,5 @@
 /**
- *  Ecobee (Presence)
+ *  Ecobee (Climate)
  *
  *  Copyright 2018 Todd Long
  *
@@ -14,10 +14,10 @@
  *
  */
 definition(
-    name: "Ecobee (Presence)",
+    name: "Ecobee (Climate)",
     namespace: "tmlong",
     author: "Todd Long",
-    description: "Notify ecobee about presence.",
+    description: "Notify ecobee about which climate to use based on your location mode.",
     category: "SmartThings Labs",
     parent: "smartthings:Ecobee (Connect)",
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/Partner/ecobee.png",
@@ -39,7 +39,7 @@ def pageMode() {
 
     log.debug "pageMode() debug: ${state.debug}, settings: ${settings}"
 
-    // initialize thermostats
+    // initialize the available thermostats
     state.thermostats = getThermostats([
         selection: [
             selectionType: "registered",
@@ -48,13 +48,16 @@ def pageMode() {
         ]
     ])
 
+    // configure the select metadata
     def select = [
-        thermostats: state.thermostats.collectEntries { k,v -> [(k): v.name] },
+        thermostats: state.thermostats.collectEntries { id, thermostat ->
+            [(id): thermostat.name]
+        },
 
         // holdType: dateTime, nextTransition, indefinite, holdHours
         holdTypes: [
-            [ indefinite: "Indefinite" ],
-            [ nextTransition: "Next Transition" ]
+            [ indefinite: "Permanent" ],
+            [ nextTransition: "Temporary" ]
         ]
     ]
 
@@ -62,17 +65,19 @@ def pageMode() {
 
     dynamicPage(name: "pageMode", title: "", nextPage: "pageClimate", install: false, uninstall: state.init) {
         section {
-            paragraph "Tap below to see the list of ecobee thermostats available and select the ones you want to connect to SmartThings."
-            input(name: "thermostats", title: "Select Thermostats", type: "enum", required: true, multiple: true, description: "Tap to choose", metadata: [values: select.thermostats])
+            paragraph "Tap below to see the list of ecobee thermostats available and select those you want to connect to SmartThings."
+            input(name: "thermostats", title: "Select Thermostats", type: "enum", required: true, multiple: true,
+            	description: "Tap to choose", metadata: [values: select.thermostats])
         }
 
         section {
-            paragraph "Tap below to see the list of hold types available and select the one you want to use with mode changes."
-            input(name: "holdType", title: "Select Hold Type", type: "enum", required: true, multiple: false, description: "Tap to choose", metadata: [values: select.holdTypes])
+            paragraph "Tap below to see the list of hold types available and select the one you want to use when changing the climate."
+            input(name: "holdType", title: "Select Hold Type", type: "enum", required: true, multiple: false,
+            	description: "Tap to choose", metadata: [values: select.holdTypes])
         }
 
         section {
-            paragraph "Tap below to see the list of modes available and select the ones you want to listen for."
+            paragraph "Tap below to see the list of modes available and select those you want to use for triggering climate changes."
             input "modes", "mode", title: "Select Mode(s)", multiple: true
         }
     }
@@ -81,26 +86,30 @@ def pageMode() {
 def pageClimate() {
     log.debug "pageClimate() settings: ${settings}"
 
+    // configure the select metadata
     def select = [
-        climates: [:]
-    ]
-
-    state.thermostats.each { id,thermostat ->
-        thermostat.climates.each { ref,name ->
-            select.climates[ref] = name
+        climates: settings.thermostats.collectEntries { id ->
+            state.thermostats[id].climates.each { ref, name ->
+                [(ref), name]
+            }
         }
-    }
+    ]
 
     log.debug "pageClimate() select: ${select}"
 
     dynamicPage(name: "pageClimate", title: "", install: true, uninstall: state.init) {
         section {
-            paragraph "Tap below to see the list of ecobee climates available and select the one you want to associate with each mode."
+            paragraph "Tap below to see the list of ecobee climates available and select the one you want to use with each mode."
         }
 
-        settings.modes.each { mode ->
-            section {
-                input(name: "${mode}", title: "Select \"${mode}\" Climate", type: "enum", required: true, multiple: false, description: "Tap to choose", metadata: [values: select.climates])
+        section {
+            settings.modes.each { mode ->
+                def climateRef = settings[mode]
+
+                log.debug "pageClimate() default climate for \"${mode}\" mode is ${select.climates[climateRef]}"
+
+                input(name: "${mode}", title: "Select \"${mode}\" Climate", type: "enum", required: true, multiple: false,
+                	description: "Tap to choose", defaultValue: climateRef, metadata: [values: select.climates])
             }
         }
     }
@@ -127,6 +136,44 @@ def updated() {
 
 def initialize() {
     log.debug "initialize()"
+
+/*
+    // create the thermostat device handlers
+    def devices = settings.thermostats.collect { id ->
+        def device = getChildDevice(id)
+
+        if (!device) {
+            def thermostat = state.thermostats[id]
+            def label = "${thermostat.name} (Climate)" ?: "Ecobee Thermostat (Climate)"
+
+            device = addChildDevice(app.namespace, getHandlerName(), id, null, [label: label, climates: thermostat.climates])
+
+            log.debug "initialize() created ${device.displayName} with id: $id"
+        } else {
+            log.debug "initialize() found ${device.displayName} with id: $id"
+        }
+
+        return device
+    }
+
+    log.debug "Initialized with devices: ${devices}"
+
+    def devicesToDelete  // Delete any that are no longer in settings
+
+    if (!thermostats) {
+        log.debug "initialize() delete all thermostat devices"
+        devicesToDelete = getAllChildDevices()
+    } else {
+        log.debug "initialize() delete individual thermostat and sensor"
+        devicesToDelete = getChildDevices().findAll {
+            !settings.thermostats.contains(it.deviceNetworkId)
+        }
+    }
+
+    log.warn "initialize() devices to delete: ${devicesToDelete}"
+
+    devicesToDelete.each { deleteChildDevice(it.deviceNetworkId) }
+*/
 
     // initialize thermostat ids for selection (i.e. request)
     state.thermostatIds = getThermostatIdsForSelection(settings.thermostats)
@@ -169,13 +216,23 @@ def getThermostats(Map query) {
     if (state.debug.enabled) {
         def thermostats = [
             12345: [
-                name: "My Thermo",
+                name: "Stat Home",
                 climates: [
                     away: "Away",
                     home: "Home",
-                    sleep: "Sleep"
+                    sleep: "Sleep",
+                    awake: "Awake"
                 ]
-            ]
+            ],
+            98765: [
+                name: "Stat Vacay",
+                climates: [
+                    away: "Away",
+                    home: "Home",
+                    sleep: "Sleep",
+                    beach: "Beach"
+                ]
+            ],
         ]
 
         log.debug "(debug) getThermostats() return: ${thermostats}"
@@ -186,7 +243,7 @@ def getThermostats(Map query) {
     def params = [
         uri: apiEndpoint,
         path: "/1/thermostat",
-        headers: ["Content-Type": "application/json", Authorization: "Bearer ${parent.atomicState.authToken}"],
+        headers: ["Content-Type": "application/json", Authorization: "Bearer ${authToken}"],
         query: [format: 'json', body: toJson(query)]
     ]
 
@@ -194,20 +251,16 @@ def getThermostats(Map query) {
 
     httpGet(params) { resp ->
         if (resp.status == 200) {
-            resp.data.thermostatList.each { stat ->
-                def climates = [:]
-
-                stat.program.climates.each { climate ->
-                    climates[climate.climateRef] = climate.name
-                }
-
-                thermostats[stat.identifier] = [
-                    name: stat.name,
-                    climates: climates
+            resp.data.thermostatList.each { thermostat ->
+                thermostats[thermostat.identifier] = [
+                    name: thermostat.name,
+                    climates: thermostat.program.climates.collectEntries {
+                        [it.climateRef, it.name]
+                    }
                 ]
             }
         } else {
-            log.debug "http status: ${resp.status}"
+            log.debug "http status: ${resp.status}, data: ${resp.data}"
         }
     }
 
@@ -243,15 +296,18 @@ def holdClimate(thermostatIds, holdType, climate) {
 
     // send the hold climate request
     def success = parent.sendCommandToEcobee(payload)
+
     log.debug "holdClimate() return: ${success}"
 
     return success
 }
 
 def getThermostatIdsForSelection(thermostats) {
-    return thermostats.collect { it.split(/\./).last() }.join(',')
+    return thermostats.collect { it }.join(',')
 }
 
 def toJson(Map m) { return groovy.json.JsonOutput.toJson(m) }
 
+def getHandlerName() { return "Ecobee Thermostat" }
+def getAuthToken()   { return parent.atomicState.authToken }
 def getApiEndpoint() { return "https://api.ecobee.com" }
