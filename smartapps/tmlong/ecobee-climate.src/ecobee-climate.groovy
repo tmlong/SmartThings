@@ -100,9 +100,7 @@ def pageClimate() {
     dynamicPage(name: "pageClimate", title: "", install: true, uninstall: state.init) {
         section {
             paragraph "Tap below to see the list of ecobee climates available and select the one you want to use with each mode."
-        }
 
-        section {
             settings.modes.each { mode ->
                 def climateRef = settings[mode]
 
