@@ -135,44 +135,6 @@ def updated() {
 def initialize() {
     log.debug "initialize()"
 
-/*
-    // create the thermostat device handlers
-    def devices = settings.thermostats.collect { id ->
-        def device = getChildDevice(id)
-
-        if (!device) {
-            def thermostat = state.thermostats[id]
-            def label = "${thermostat.name} (Climate)" ?: "Ecobee Thermostat (Climate)"
-
-            device = addChildDevice(app.namespace, getHandlerName(), id, null, [label: label, climates: thermostat.climates])
-
-            log.debug "initialize() created ${device.displayName} with id: $id"
-        } else {
-            log.debug "initialize() found ${device.displayName} with id: $id"
-        }
-
-        return device
-    }
-
-    log.debug "Initialized with devices: ${devices}"
-
-    def devicesToDelete  // Delete any that are no longer in settings
-
-    if (!thermostats) {
-        log.debug "initialize() delete all thermostat devices"
-        devicesToDelete = getAllChildDevices()
-    } else {
-        log.debug "initialize() delete individual thermostat and sensor"
-        devicesToDelete = getChildDevices().findAll {
-            !settings.thermostats.contains(it.deviceNetworkId)
-        }
-    }
-
-    log.warn "initialize() devices to delete: ${devicesToDelete}"
-
-    devicesToDelete.each { deleteChildDevice(it.deviceNetworkId) }
-*/
-
     // initialize thermostat ids for selection (i.e. request)
     state.thermostatIds = getThermostatIdsForSelection(settings.thermostats)
 
@@ -186,6 +148,9 @@ def initialize() {
 
     log.debug "Initialized with state: ${state}"
 
+    // initialize the child handlers
+    initializeHandlers()
+
     // send the initial mode change
     modeChangeHandler([value: location.mode])
 
@@ -194,6 +159,55 @@ def initialize() {
 
     // subscribe to "mode" events
     subscribe(location, "mode", modeChangeHandler)
+}
+
+def initializeHandlers() {
+    log.debug "initializeHandlers()"
+
+    // create the thermostat device handlers
+    def devices = settings.thermostats.collect { id ->
+        def device = getChildDevice(id)
+
+        if (!device) {
+            def thermostat = state.thermostats[id]
+            def label = "${thermostat.name} (Climate)" ?: "Ecobee Thermostat (Climate)"
+
+            device = addChildDevice(app.namespace, getHandlerName(), id, null, [label: label])
+
+            log.debug "initializeHandlers() created ${device.displayName} with id: $id"
+        } else {
+            log.debug "initializeHandlers() found ${device.displayName} with id: $id"
+        }
+
+        return device
+    }
+
+    log.debug "Initialized with devices: ${devices}"
+
+    // delete the thermostat device handlers that are no longer used
+    def devicesToDelete = getChildDevices().findAll {
+        !settings.thermostats.contains(it.deviceNetworkId)
+    }
+
+    log.warn "initializeHandlers() devices to delete: ${devicesToDelete}"
+
+    devicesToDelete.each { deleteChildDevice(it.deviceNetworkId) }
+
+    pollHandlers()
+
+    runEvery5Minutes("pollHandlers")
+}
+
+def pollHandlers() {
+    log.debug "pollHandlers()"
+
+    settings.thermostats.each { id ->
+        def device = getChildDevice(id)
+
+        if (device) {
+            device.generateEvent(state.climate)
+        }
+    }
 }
 
 def modeChangeHandler(event) {
