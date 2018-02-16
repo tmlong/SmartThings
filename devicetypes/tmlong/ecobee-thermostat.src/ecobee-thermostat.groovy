@@ -18,6 +18,7 @@ metadata {
         capability "Actuator"
         capability "Refresh"
         capability "Switch"
+		capability "Thermostat"
     }
 
     simulator {
@@ -26,19 +27,21 @@ metadata {
 
     // tile definitions
     tiles(scale: 2) {
-        multiAttributeTile(name:"switch", type: "generic", width: 3, height: 2, canChangeIcon: true){
-            tileAttribute ("device.switch", key: "PRIMARY_CONTROL") {
-                attributeState "on", label: 'on', action: "switch.off", icon: "st.alarm.temperature.normal", backgroundColor: "#00A0DC"
-                attributeState "off", label: 'off', action: "switch.on", icon: "st.alarm.temperature.normal", backgroundColor: "#ffffff"
+        multiAttributeTile(name: "climate", type: "thermostat", width: 6, height: 4, canChangeIcon: true) {
+            tileAttribute("device.climate", key: "PRIMARY_CONTROL") {
+                attributeState "on", label: '${currentValue}', action: "switch.off", icon: "st.alarm.temperature.normal", backgroundColor: "#00A0DC", nextState:"turningOff"
+                attributeState "off", label: 'paused', action: "switch.on", icon: "st.alarm.temperature.normal", backgroundColor: "#ffffff", nextState:"turningOn"
+                attributeState "turningOn", label:'resuming', action:"switch.off", icon:"st.alarm.temperature.normal", backgroundColor:"#00A0DC", nextState:"turningOff"
+				attributeState "turningOff", label:'pausing', action:"switch.on", icon:"st.alarm.temperature.normal", backgroundColor:"#ffffff", nextState:"turningOn"
             }
         }
 
         standardTile("refresh", "device.switch", width: 2, height: 2, inactiveLabel: false, decoration: "flat") {
-            state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
+            state "default", label: '', action: "refresh.refresh", icon: "st.secondary.refresh"
         }
 
-        main "switch"
-        details(["switch","refresh"])
+        main "climate"
+        details(["climate", "refresh"])
     }
 }
 
@@ -47,15 +50,25 @@ def parse(String description) {
     log.debug "Parsing '${description}'"
 }
 
+def generateEvent(Map results) {
+    log.debug "generateEvent() results: ${results}"
+
+    if (results) {
+        state.climate = results[location.mode]
+
+        sendEvent(name: "climate", value: "${state.climate}")
+    }
+}
+
 // handle commands
 def on() {
     log.debug "on()"
-    sendEvent(name: "switch", value: "on")
+    sendEvent(name: "climate", value: "${state.climate}")
 }
 
 def off() {
     log.debug "off()"
-    sendEvent(name: "switch", value: "off")
+    sendEvent(name: "climate", value: "off")
 }
 
 def refresh() {
