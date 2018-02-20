@@ -54,16 +54,16 @@ def generateEvent(Map results) {
     log.debug "generateEvent() results: ${results}"
 
     if (results) {
-        state.climate = results[location.mode]
+        state.climate = results.climate ?: "waiting"
 
-        sendEvent(name: "climate", value: "${state.climate}")
+        sendEvent(name: "climate", value: state.climate)
     }
 }
 
 // handle commands
 def on() {
     log.debug "on()"
-    sendEvent(name: "climate", value: "${state.climate}")
+    sendEvent(name: "climate", value: state.climate)
 }
 
 def off() {

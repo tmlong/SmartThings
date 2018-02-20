@@ -12,6 +12,19 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
+ *  ###
+ *
+ *  settings
+ *    climates
+ *    holdType
+ *    modes
+ *    thermostats (selected thermostats to use with SmartThings)
+ *
+ *  state
+ *    currentClimateRef
+ *    thermostatIds
+ *    thermostats (all available ecobee thermostats)
+ *
  */
 definition(
     name: "Ecobee (Climate)",
@@ -103,8 +116,9 @@ def pageClimate() {
 
             settings.modes.each { mode ->
                 def climateRef = settings[mode]
+                def climate = select.climates[climateRef] ?: "not configured"
 
-                log.debug "pageClimate() default climate for \"${mode}\" mode is ${select.climates[climateRef]}"
+                log.debug "pageClimate() default climate for \"${mode}\" mode is ${climate}"
 
                 input(name: "${mode}", title: "Select \"${mode}\" Climate", type: "enum", required: true, multiple: false,
                 	description: "Tap to choose", defaultValue: climateRef, metadata: [values: select.climates])
@@ -114,7 +128,7 @@ def pageClimate() {
 }
 
 def installed() {
-    log.debug "Installed with settings: ${settings}"
+    log.info "Installed with settings: ${settings}"
 
     if (!state.init) {
         state.init = true;
@@ -127,7 +141,7 @@ def updated() {
 
     state.lastUpdated = now()
 
-    log.debug "Updated with settings: ${settings}"
+    log.info "Updated with settings: ${settings}"
 
     initialize()
 }
@@ -138,21 +152,13 @@ def initialize() {
     // initialize thermostat ids for selection (i.e. request)
     state.thermostatIds = getThermostatIdsForSelection(settings.thermostats)
 
-    // initialize the hold type
-    state.holdType = settings.holdType
-
-    // initialize the mode to climate map
-    state.climate = settings.modes.collectEntries {
-        [(it): settings[it]]
-    }
-
-    log.debug "Initialized with state: ${state}"
-
-    // initialize the child handlers
-    initializeHandlers()
+    log.info "Initialized with state: ${state}"
 
     // send the initial mode change
     modeChangeHandler([value: location.mode])
+
+    // initialize the child handlers
+    initializeHandlers()
 
     // unsubscribe from previous events
     unsubscribe()
@@ -182,16 +188,18 @@ def initializeHandlers() {
         return device
     }
 
-    log.debug "Initialized with devices: ${devices}"
+    log.info "Initialized with devices: ${devices}"
 
     // delete the thermostat device handlers that are no longer used
     def devicesToDelete = getChildDevices().findAll {
         !settings.thermostats.contains(it.deviceNetworkId)
     }
 
-    log.warn "initializeHandlers() devices to delete: ${devicesToDelete}"
+    if (devicesToDelete) {
+        log.warn "initializeHandlers() devices to delete: ${devicesToDelete}"
 
-    devicesToDelete.each { deleteChildDevice(it.deviceNetworkId) }
+        devicesToDelete.each { deleteChildDevice(it.deviceNetworkId) }
+    }
 
     pollHandlers()
 
@@ -205,7 +213,19 @@ def pollHandlers() {
         def device = getChildDevice(id)
 
         if (device) {
-            device.generateEvent(state.climate)
+            def thermostat = state.thermostats[id]
+            def climateRef = state.currentClimateRef ?: thermostat.currentClimateRef
+
+            log.debug "pollHandlers() thermostat: ${thermostat}, climateRef: ${climateRef}"
+
+            // configure the device event
+            def event = [
+                climate: thermostat.climates[climateRef]
+            ]
+
+            log.debug "pollHandlers() event: ${event}"
+
+            device.generateEvent(event)
         }
     }
 }
@@ -213,12 +233,17 @@ def pollHandlers() {
 def modeChangeHandler(event) {
     log.debug "modeChangeHandler() event: ${event}"
 
-    // get the mode
 	def mode = event.value
+    def climateRef = settings[mode]
 
-    log.debug "modeChangeHandler() mode: ${mode}"
+    log.debug "modeChangeHandler() mode: ${mode}, climateRef: ${climateRef}"
 
-    holdClimate(state.thermostatIds, state.holdType, state.climate[mode])
+    if (climateRef) {
+        // set the current climate
+        state.currentClimateRef = climateRef
+
+        holdClimate(state.thermostatIds, settings.holdType, climateRef)
+    }
 }
 
 // @see https://www.ecobee.com/home/developer/api/documentation/v1/operations/get-thermostats.shtml
@@ -229,6 +254,7 @@ def getThermostats(Map query) {
         def thermostats = [
             12345: [
                 name: "Stat Home",
+                currentClimateRef: "away",
                 climates: [
                     away: "Away",
                     home: "Home",
@@ -238,6 +264,7 @@ def getThermostats(Map query) {
             ],
             98765: [
                 name: "Stat Vacay",
+                currentClimateRef: "home",
                 climates: [
                     away: "Away",
                     home: "Home",
@@ -266,6 +293,7 @@ def getThermostats(Map query) {
             resp.data.thermostatList.each { thermostat ->
                 thermostats[thermostat.identifier] = [
                     name: thermostat.name,
+                    currentClimateRef: thermostat.program.currentClimateRef,
                     climates: thermostat.program.climates.collectEntries {
                         [it.climateRef, it.name]
                     }
@@ -282,8 +310,8 @@ def getThermostats(Map query) {
 }
 
 // @see https://www.ecobee.com/home/developer/api/documentation/v1/functions/SetHold.shtml
-def holdClimate(thermostatIds, holdType, climate) {
-    log.debug "holdClimate() thermostatIds: ${thermostatIds}, holdType: ${holdType}, climate: ${climate}"
+def holdClimate(thermostatIds, holdType, climateRef) {
+    log.debug "holdClimate() thermostatIds: ${thermostatIds}, holdType: ${holdType}, climateRef: ${climateRef}"
 
     if (state.debug.enabled) {
         log.debug "(debug) holdClimate() return: true"
@@ -301,7 +329,7 @@ def holdClimate(thermostatIds, holdType, climate) {
             type: "setHold",
             params: [
                 holdType: holdType,
-                holdClimateRef: climate
+                holdClimateRef: climateRef
             ]
         ]]
     ]
