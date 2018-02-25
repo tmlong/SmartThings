@@ -32,6 +32,10 @@ def pageCapability() {
 
     // define the available capabilites
     def capabilities = [
+            lock: [
+                    type: "capability.lock",
+                    title: "Select Locks"
+            ],
             outlet: [
                     type: "capability.outlet",
                     title: "Select Outlets"
