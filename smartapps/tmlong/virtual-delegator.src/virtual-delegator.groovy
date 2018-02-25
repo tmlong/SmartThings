@@ -30,27 +30,23 @@ preferences {
 def pageCapability() {
     log.debug "pageCapability()"
 
-    // define the available capabilites
+    // define the capabilites
     def capabilities = [
-            lock: [
-                    type: "capability.lock",
-                    title: "Select Locks"
-            ],
-            outlet: [
-                    type: "capability.outlet",
-                    title: "Select Outlets"
-            ],
-            switch: [
-                    type: "capability.switch",
-                    title: "Select Switches"
-            ]
+        outlet: [
+            type: "capability.outlet",
+            title: "Select Outlets"
+        ],
+        switch: [
+            type: "capability.switch",
+            title: "Select Switches"
+        ]
     ]
 
     // configure the select metadata
     def select = [
-            capabilities: [
-                    values: capabilities.keySet().collect()
-            ]
+        capabilities: [
+            values: capabilities.keySet().collect()
+        ]
     ]
 
     dynamicPage(name: "pageCapability", title: "", install: true, uninstall: state.init) {
@@ -74,8 +70,8 @@ def installed() {
     log.info "Installed with settings: ${settings}"
 
     if (!state.init) {
-        state.init = true;
-        state.deviceId = getHandlerId()
+        state.deviceId = getHandlerId(settings.capability)
+        state.init = true
     }
 }
 
@@ -89,10 +85,10 @@ def updated() {
 def initialize() {
     log.debug "initialize()"
 
-    // initialize the child handlers
+    // initialize the device handlers
     initializeHandlers()
 
-    // subscribe to the capability events
+    // subscribe to the delegates capability event
     subscribe(settings.delegates, settings.capability, delegatesHandler)
 }
 
@@ -102,15 +98,26 @@ def initializeHandlers() {
     def device = getChildDevice(state.deviceId)
 
     if (!device) {
-        // add the child device
-        device = addChildDevice(app.namespace, getHandlerName(), state.deviceId, null)
+        // add the device handler
+        device = addChildDevice(app.namespace, getHandlerName(settings.capability), state.deviceId, null)
 
         log.debug "initializeHandlers() created ${device.displayName} with id: ${state.deviceId}"
     } else {
         log.debug "initializeHandlers() found ${device.displayName} with id: ${state.deviceId}"
     }
 
-    // send the initial delegates
+    log.info "Initialized with devices: ${devices}"
+
+    // delete the device handlers that are no longer used
+    def devicesToDelete = getChildDevices().findAll { state.deviceId != it.deviceNetworkId }
+
+    if (devicesToDelete) {
+        log.warn "initializeHandlers() devices to delete: ${devicesToDelete}"
+
+        devicesToDelete.each { deleteChildDevice(it.deviceNetworkId) }
+    }
+
+    // send the initial delegates update
     delegatesHandler()
 }
 
@@ -120,10 +127,25 @@ def delegatesHandler(event) {
     // get the child device
     def device = getChildDevice(state.deviceId)
 
+    log.debug "delegatesHandler() device: ${device}"
+
     device.handleEvent()
 }
 
-def getDelegates()   { return settings.delegates }
+def getDelegates() {
+    return settings.delegates
+}
 
-def getHandlerName() { return "Virtual Switch" }
-def getHandlerId()   { return "${settings.capability}.${UUID.randomUUID().toString()}" }
+def getHandlerName(capability) {
+    switch (capability) {
+        case "outlet":
+        case "switch":
+            return "Virtual Delegator Switch"
+    }
+
+    throw "Device handler not defined for capability: ${capability}"
+}
+
+def getHandlerId(capability) {
+    return "${capability}.${UUID.randomUUID().toString()}"
+}

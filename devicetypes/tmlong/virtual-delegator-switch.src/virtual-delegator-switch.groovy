@@ -65,15 +65,16 @@ def handleEvent(Map event) {
     log.debug "handleEvent() event: ${event}"
 
     // determine the switches state
-    def switchesState = partiallyOn(parent.delegates)
+    def switchesState = determineState(parent.delegates)
 
     log.debug "handleEvent() switches: ${parent.delegates}, switchesState: ${switchesState}"
 
     sendEvent(name: "switch", value: switchesState)
 }
 
-def partiallyOn(switches) {
-    log.debug "partiallyOn() switches: ${switches}"
+// determine the switches state
+def determineState(switches) {
+    log.debug "switchesState() switches: ${switches}"
 
     // determine which switches are turned on
     def switchesOn = switches.findAll {
@@ -96,11 +97,12 @@ def off() {
     log.debug "off()"
 
     // determine the switches state
-    def switchesState = partiallyOn(parent.delegates)
+    def switchesState = determineState(parent.delegates)
+    def shouldTurnOn = (switchesState == "someOn" && whenSomeOn == false)
 
-    log.debug "off() switchesState: ${switchesState}, whenSomeOn: ${whenSomeOn}"
+    log.debug "off() switchesState: ${switchesState}, shouldTurnOn: ${shouldTurnOn}"
 
-    if (switchesState == "someOn" && whenSomeOn == false) {
+    if (shouldTurnOn) {
         on()
     } else {
         // turn off the switches
