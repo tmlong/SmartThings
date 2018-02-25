@@ -19,6 +19,10 @@ metadata {
         capability "Switch"
     }
 
+    simulator {
+        // TODO: define status and reply messages here
+    }
+
     tiles(scale: 2) {
         multiAttributeTile(name: "switch", type: "generic", width: 6, height: 4, canChangeIcon: true) {
             tileAttribute("device.switch", key: "PRIMARY_CONTROL") {
@@ -69,6 +73,8 @@ def handleEvent(Map event) {
 }
 
 def partiallyOn(switches) {
+    log.debug "partiallyOn() switches: ${switches}"
+
     // determine which switches are turned on
     def switchesOn = switches.findAll {
         it.currentSwitch == "on"
