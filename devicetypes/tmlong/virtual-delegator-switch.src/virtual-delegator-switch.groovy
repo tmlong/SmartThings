@@ -1,5 +1,5 @@
 /**
- *  Virtual Switch
+ *  Virtual Delegator Switch
  *
  *  Copyright 2018 Todd Long
  *
@@ -14,7 +14,7 @@
  *
  */
 metadata {
-    definition (name: "Virtual Switch", namespace: "tmlong", author: "Todd Long") {
+    definition (name: "Virtual Delegator Switch", namespace: "tmlong", author: "Todd Long") {
         capability "Refresh"
         capability "Switch"
     }
