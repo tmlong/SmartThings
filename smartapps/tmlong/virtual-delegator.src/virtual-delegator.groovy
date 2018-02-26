@@ -30,22 +30,10 @@ preferences {
 def pageCapability() {
     log.debug "pageCapability()"
 
-    // define the capabilites
-    def capabilities = [
-        outlet: [
-            type: "capability.outlet",
-            title: "Select Outlets"
-        ],
-        switch: [
-            type: "capability.switch",
-            title: "Select Switches"
-        ]
-    ]
-
     // configure the select metadata
     def select = [
         capabilities: [
-            values: capabilities.keySet().collect()
+            values: getCapabilities().keySet().collect()
         ]
     ]
 
@@ -89,7 +77,7 @@ def initialize() {
     initializeHandlers()
 
     // subscribe to the delegates capability event
-    subscribe(settings.delegates, settings.capability, delegatesHandler)
+    subscribe(settings.delegates, getCapabilities()[settings.capability].event, delegatesHandler)
 }
 
 def initializeHandlers() {
@@ -148,4 +136,19 @@ def getHandlerName(capability) {
 
 def getHandlerId(capability) {
     return "${capability}.${UUID.randomUUID().toString()}"
+}
+
+def getCapabilities() {
+    return [
+        outlet: [
+            event: "switch",
+            type: "capability.outlet",
+            title: "Select Outlets"
+        ],
+        switch: [
+            event: "switch",
+            type: "capability.switch",
+            title: "Select Switches"
+        ]
+    ]
 }

@@ -24,13 +24,29 @@ metadata {
     }
 
     tiles(scale: 2) {
-        multiAttributeTile(name: "switch", type: "generic", width: 6, height: 4, canChangeIcon: true) {
+        standardTile("switch_main", "device.switch") {
+            state "on", label: "on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#00A0DC", nextState: "turningOff"
+            state "off", label: "off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
+            state "someOn", label: "some on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#79b821", nextState: "turningOff"
+            state "turningOn", label: "turning on", action: "switch.off", icon: "st.switches.switch.on", backgroundColor: "#00A0DC", nextState: "turningOff"
+            state "turningOff", label: "turning off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
+        }
+
+        multiAttributeTile(name: "switch_details", type: "generic", width: 6, height: 4) {
             tileAttribute("device.switch", key: "PRIMARY_CONTROL") {
                 attributeState "on", label: "on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#00A0DC", nextState: "turningOff"
                 attributeState "off", label: "off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
-                attributeState "someOn", label: "some on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#79b821", nextState: "turningOff"
-                attributeState "turningOn", label: "turning on", action: "switch.off", icon: "st.switches.switch.on", backgroundColor: "#00A0DC", nextState: "turningOff"
-                attributeState "turningOff", label: "turning off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
+                attributeState "someOn", label: "on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#79b821", nextState: "turningOff"
+                attributeState "turningOn", label: "on", action: "switch.off", icon: "st.switches.switch.on", backgroundColor: "#00A0DC", nextState: "turningOff"
+                attributeState "turningOff", label: "off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
+            }
+
+            tileAttribute("device.switch", key: "SECONDARY_CONTROL") {
+                attributeState "on", label: "all on", action: "switch.off", backgroundColor: "#00A0DC", nextState: "turningOff"
+                attributeState "off", label: "all off", action: "switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
+                attributeState "someOn", label: "some on", action: "switch.off", backgroundColor: "#79b821", nextState: "turningOff"
+                attributeState "turningOn", label: "turning on...", action: "switch.off", backgroundColor: "#00A0DC", nextState: "turningOff"
+                attributeState "turningOff", label: "turning off...", action: "switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
             }
         }
 
@@ -46,13 +62,101 @@ metadata {
             state "default", action: "refresh.refresh", icon: "st.secondary.refresh"
         }
 
-        main "switch"
-        details(["switch", "on", "off", "refresh"])
+        main "switch_main"
+        details(["switch_details", "on", "off", "refresh"])
     }
 
     preferences {
-        input "whenSomeOn", "bool", title: "Turn off lights when some are on?", defaultValue: true
+        input "whenSomeOn", "bool", title: "How should switches be controlled when some are on? By default, they will be turned off. Otherwise, they will be turned on.", defaultValue: true
     }
+}
+
+def get_SwitchState() {
+    [ ON: "on", OFF: "off", SOME: "someOn" ]
+}
+
+def get_TransitionState() {
+    [ ON: "turningOn", OFF: "turningOff" ]
+}
+
+//
+// Handle the parent event.
+//
+def handleEvent(Map event) {
+    log.debug "handleEvent() event: ${event}"
+
+    // determine the switch state
+    def switchState = determineState(parent.delegates)
+
+    // check if we are currently working
+    if (state.working) {
+        if (switchState == state.working) {
+            state.working = null
+        } else {
+            return
+        }
+    }
+
+    log.debug "handleEvent() switches: ${parent.delegates}, switchState: ${switchState}"
+
+    sendEvent(name: "switch", value: switchState)
+}
+
+//
+// Determine the switch state.
+//
+def determineState(switches) {
+    log.debug "determineState() switches: ${switches}"
+
+    // determine which switches are turned on
+    def switchesOn = switches.findAll {
+        it.currentSwitch == "on"
+    }
+
+    def switchState = (switchesOn.size() == switches.size()) ? _SwitchState.ON
+        : (!switchesOn.size() ? _SwitchState.OFF : _SwitchState.SOME)
+
+    log.debug "determineState() switchState: ${switchState}"
+
+    return switchState
+}
+
+//
+// Determine the transition state.
+//
+def determineTransitionState(command) {
+    log.debug "determineTransitionState() command: ${command}"
+
+    switch (command) {
+        case _SwitchState.ON: _TransitionState.ON; break
+        case _SwitchState.OFF: _TransitionState.OFF; break
+    }
+}
+
+//
+// Determine if the switches should be turned on.
+//
+def shouldTurnOn(switches) {
+    log.debug "shouldTurnOn() switches: ${switches}"
+
+    // determine the switch state
+    def switchState = determineState(switches)
+    def shouldTurnOn = (switchState == _SwitchState.SOME && whenSomeOn == false)
+
+    log.debug "shouldTurnOn() switchState: ${switchState}, shouldTurnOn: ${shouldTurnOn}"
+
+    return shouldTurnOn
+}
+
+//
+// Delegate the current command to the switches.
+//
+def delegate(switches, command) {
+    log.debug "delegate()"
+
+    state.working = command
+    switches."${command}"()
+    sendEvent(name: "switch", value: determineTransitionState(command))
 }
 
 // parse events into attributes
@@ -60,54 +164,22 @@ def parse(String description) {
     log.debug "Parsing '${description}'"
 }
 
-// handle parent event
-def handleEvent(Map event) {
-    log.debug "handleEvent() event: ${event}"
-
-    // determine the switches state
-    def switchesState = determineState(parent.delegates)
-
-    log.debug "handleEvent() switches: ${parent.delegates}, switchesState: ${switchesState}"
-
-    sendEvent(name: "switch", value: switchesState)
-}
-
-// determine the switches state
-def determineState(switches) {
-    log.debug "switchesState() switches: ${switches}"
-
-    // determine which switches are turned on
-    def switchesOn = switches.findAll {
-        it.currentSwitch == "on"
-    }
-
-    return (switchesOn.size() == switches.size()) ? "on" : (!switchesOn.size() ? "off" : "someOn")
-}
-
 // handle commands
 def on() {
     log.debug "on()"
 
     // turn on the switches
-    parent.delegates.on()
-    sendEvent(name: "switch", value: "on")
+    delegate(parent.delegates, _SwitchState.ON)
 }
 
 def off() {
     log.debug "off()"
 
-    // determine the switches state
-    def switchesState = determineState(parent.delegates)
-    def shouldTurnOn = (switchesState == "someOn" && whenSomeOn == false)
-
-    log.debug "off() switchesState: ${switchesState}, shouldTurnOn: ${shouldTurnOn}"
-
-    if (shouldTurnOn) {
+    if (shouldTurnOn(parent.delegates)) {
         on()
     } else {
         // turn off the switches
-        parent.delegates.off()
-        sendEvent(name: "switch", value: "off")
+        delegate(parent.delegates, _SwitchState.OFF)
     }
 }
 
