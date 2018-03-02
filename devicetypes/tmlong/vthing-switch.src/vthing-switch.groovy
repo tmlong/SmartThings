@@ -1,5 +1,5 @@
 /**
- *  Virtual Delegator Switch
+ *  vThing Switch
  *
  *  Copyright 2018 Todd Long
  *
@@ -14,7 +14,7 @@
  *
  */
 metadata {
-    definition (name: "Virtual Delegator Switch", namespace: "tmlong", author: "Todd Long") {
+    definition (name: "vThing Switch", namespace: "tmlong", author: "Todd Long") {
         capability "Refresh"
         capability "Switch"
     }
@@ -24,7 +24,7 @@ metadata {
     }
 
     tiles(scale: 2) {
-        standardTile("switch_main", "device.switch") {
+        standardTile("main", "device.switch") {
             state "on", label: "on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#00A0DC", nextState: "turningOff"
             state "off", label: "off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
             state "someOn", label: "some on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#79b821", nextState: "turningOff"
@@ -32,7 +32,7 @@ metadata {
             state "turningOff", label: "turning off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
         }
 
-        multiAttributeTile(name: "switch_details", type: "generic", width: 6, height: 4) {
+        multiAttributeTile(name: "details", type: "generic", width: 6, height: 4) {
             tileAttribute("device.switch", key: "PRIMARY_CONTROL") {
                 attributeState "on", label: "on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#00A0DC", nextState: "turningOff"
                 attributeState "off", label: "off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
@@ -62,12 +62,12 @@ metadata {
             state "default", action: "refresh.refresh", icon: "st.secondary.refresh"
         }
 
-        main "switch_main"
-        details(["switch_details", "on", "off", "refresh"])
+        main "main"
+        details(["details", "on", "off", "refresh"])
     }
 
     preferences {
-        input "whenSomeOn", "bool", title: "How should switches be controlled when some are on? By default, they will be turned off. Otherwise, they will be turned on.", defaultValue: true
+        input "whenSomeOn", "bool", title: "How should switches be controlled when some are on? By default, they will be turned off.", defaultValue: true
     }
 }
 
@@ -77,29 +77,6 @@ def get_SwitchState() {
 
 def get_TransitionState() {
     [ ON: "turningOn", OFF: "turningOff" ]
-}
-
-//
-// Handle the parent event.
-//
-def handleEvent(Map event) {
-    log.debug "handleEvent() event: ${event}"
-
-    // determine the switch state
-    def switchState = determineState(parent.delegates)
-
-    // check if we are currently working
-    if (state.working) {
-        if (switchState == state.working) {
-            state.working = null
-        } else {
-            return
-        }
-    }
-
-    log.debug "handleEvent() switches: ${parent.delegates}, switchState: ${switchState}"
-
-    sendEvent(name: "switch", value: switchState)
 }
 
 //
@@ -118,7 +95,7 @@ def determineState(switches) {
 
     log.debug "determineState() switchState: ${switchState}"
 
-    return switchState
+    switchState
 }
 
 //
@@ -148,17 +125,6 @@ def shouldTurnOn(switches) {
     return shouldTurnOn
 }
 
-//
-// Delegate the current command to the switches.
-//
-def delegate(switches, command) {
-    log.debug "delegate()"
-
-    state.working = command
-    switches."${command}"()
-    sendEvent(name: "switch", value: determineTransitionState(command))
-}
-
 // parse events into attributes
 def parse(String description) {
     log.debug "Parsing '${description}'"
@@ -169,7 +135,7 @@ def on() {
     log.debug "on()"
 
     // turn on the switches
-    delegate(parent.delegates, _SwitchState.ON)
+    parent.doDelegation(_SwitchState.ON)
 }
 
 def off() {
@@ -179,7 +145,7 @@ def off() {
         on()
     } else {
         // turn off the switches
-        delegate(parent.delegates, _SwitchState.OFF)
+        parent.doDelegation(_SwitchState.OFF)
     }
 }
 
