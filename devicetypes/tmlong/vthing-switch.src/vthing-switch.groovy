@@ -37,8 +37,8 @@ metadata {
                 attributeState "on", label: "on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#00A0DC", nextState: "turningOff"
                 attributeState "off", label: "off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
                 attributeState "someOn", label: "on", action: "switch.off", icon: "st.switches.switch.off", backgroundColor: "#79b821", nextState: "turningOff"
-                attributeState "turningOn", label: "on", action: "switch.off", icon: "st.switches.switch.on", backgroundColor: "#00A0DC", nextState: "turningOff"
-                attributeState "turningOff", label: "off", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
+                attributeState "turningOn", label: "...", action: "switch.off", icon: "st.switches.switch.on", backgroundColor: "#00A0DC", nextState: "turningOff"
+                attributeState "turningOff", label: "...", action: "switch.on", icon: "st.switches.switch.on", backgroundColor: "#ffffff", nextState: "turningOn"
             }
 
             tileAttribute("device.switch", key: "SECONDARY_CONTROL") {
@@ -85,13 +85,17 @@ def get_TransitionState() {
 def determineState(switches) {
     log.debug "determineState() switches: ${switches}"
 
-    // determine which switches are turned on
-    def switchesOn = switches.findAll {
-        it.currentSwitch == "on"
-    }
+    def switchState = _SwitchState.ON
 
-    def switchState = (switchesOn.size() == switches.size()) ? _SwitchState.ON
-        : (!switchesOn.size() ? _SwitchState.OFF : _SwitchState.SOME)
+    // determine which switches are turned on
+    def switchesOn = switches.count { it.currentSwitch == _SwitchState.ON }
+
+    if (switchesOn != switches.size()) {
+        // determine which switches are turned off
+        def switchesOff = switches.count { it.currentSwitch == _SwitchState.OFF }
+
+        switchState = switchesOff != switches.size() ? _SwitchState.SOME : _SwitchState.OFF
+    }
 
     log.debug "determineState() switchState: ${switchState}"
 
@@ -99,7 +103,7 @@ def determineState(switches) {
 }
 
 //
-// Determine the transition state.
+// Determine the switch transition state.
 //
 def determineTransitionState(command) {
     log.debug "determineTransitionState() command: ${command}"
@@ -122,7 +126,7 @@ def shouldTurnOn(switches) {
 
     log.debug "shouldTurnOn() switchState: ${switchState}, shouldTurnOn: ${shouldTurnOn}"
 
-    return shouldTurnOn
+    shouldTurnOn
 }
 
 // parse events into attributes
@@ -151,4 +155,6 @@ def off() {
 
 def refresh() {
     log.debug "refresh()"
+
+    sendEvent(name: "switch", value: determineState(parent.delegates))
 }

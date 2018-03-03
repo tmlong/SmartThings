@@ -46,8 +46,10 @@ def pageMain() {
             app(name: "vThing", appName: app.name, namespace: "tmlong", title: "Add vThing...", multiple: true, uninstall: false)
         }
 
-        section(title: "App Info") {
-            href "pageSettings", title: "Settings", description: ""
+        if (isInstalled) {
+            section(title: "App Info") {
+                href "pageSettings", title: "Settings", description: ""
+            }
         }
     }
 }
@@ -106,9 +108,7 @@ def updated() {
 def initialize() {
     log.debug "initialize() isParent: ${isParent}"
 
-    if (!isParent) {
-        initializeThing()
-    }
+    if (!isParent) initializeThing()
 }
 
 def initializeThing() {
@@ -127,24 +127,23 @@ def initializeThing() {
 def initializeHandler() {
     log.debug "initializeHandler()"
 
-    def device = getChildDevice(state.deviceId)
-
     if (!device) {
         // add the device handler
-        device = addChildDevice(app.namespace, handlerName, state.deviceId, null, [label: app.label])
+        addChildDevice(app.namespace, handlerName, state.deviceId, null, [label: app.label])
 
-        log.debug "initializeHandler() created ${device.displayName} with id: ${state.deviceId}"
+        log.debug "initializeHandler() created device: ${device}"
     } else {
-        log.debug "initializeHandler() found ${device.displayName} with id: ${state.deviceId}"
+        log.debug "initializeHandler() found device: ${device}"
     }
 
     // delete the device handlers that are no longer used
-    def devicesToDelete = getChildDevices().findAll { state.deviceId != it.deviceNetworkId }
+    def devicesToDelete = getChildDevices().findAll { it.deviceNetworkId != state.deviceId }
 
     if (devicesToDelete) {
-        log.warn "initializeHandler() devices to delete: ${devicesToDelete}"
-
+        // delete the device handlers
         devicesToDelete.each { deleteChildDevice(it.deviceNetworkId) }
+
+        log.warn "initializeHandler() deleted devices: ${devicesToDelete}"
     }
 
     // send the initial event
@@ -152,32 +151,42 @@ def initializeHandler() {
 }
 
 def delegatesHandler(event) {
-    log.debug "delegatesHandler() event: ${event.name}"
+    log.debug "delegatesHandler() event: ${event.name}, value: ${event.value}, displayName: ${event.displayName}"
 
-    // get the device handler
-    def device = getChildDevice(state.deviceId)
+    def deviceState = event.value
 
-    // determine the device state
-    def deviceState = device.determineState(delegates)
-
-    // check if we are currently working
+    // check if we are in a working state
     if (state.working) {
-        if (deviceState == state.working) {
+        state.working[event.deviceId] = event.value
+
+        // determine if we are still working
+        def workingCount = state.working.count { k,v -> (v == event.value) }
+
+        log.trace "delegatesHandler() workingCount: ${workingCount}, delegates: ${delegates.size()}"
+
+        if (workingCount == delegates.size()) {
             state.working = null
         } else {
             return
         }
+    } else {
+        deviceState = device.determineState(delegates)
     }
 
-    log.debug "delegatesHandler() delegates: ${delegates}, deviceState: ${deviceState}"
-
+    // send the device state event
     device.sendEvent(name: capability.event, value: deviceState)
 }
 
 def doDelegation(command) {
-    log.debug "doDelegation()"
+    log.debug "doDelegation() command: ${command}"
 
-    state.working = command
+    // initialize the working state
+    state.working = delegates.collectEntries { [(it.id): it.currentValue(capability.event)] }
+
+    // send the device transition state event
+    device.sendEvent(name: capability.event, value: device.determineTransitionState(command))
+
+    // delegate!
     delegates."${command}"()
 }
 
@@ -190,12 +199,14 @@ def getNextThingName() {
 
     parent.childApps.any {
         def childApp = parent.childApps.any { it.label == "vThing #${i}" }
-        if (!childApp) return true
-        i++
-        return false
+        return !childApp ? true : (i++ && false)
     }
 
     "vThing #${i}"
+}
+
+def getDevice() {
+    getChildDevice(state.deviceId)
 }
 
 def getDelegates() {
