@@ -118,7 +118,7 @@ def shouldTurnOn(switches) {
 
     // determine the switch state
     def switchState = determineState(switches)
-    def shouldTurnOn = (!whenSomeOn && switchState == _SwitchState.SOME)
+    def shouldTurnOn = (whenSomeOn && switchState == _SwitchState.SOME)
 
     log.debug "shouldTurnOn() switchState: ${switchState}, shouldTurnOn: ${shouldTurnOn}"
 
