@@ -20,9 +20,9 @@ definition(
         description: "A virtual delegator of things.",
         singleInstance: true,
         category: "SmartThings Labs",
-        iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
-        iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
-        iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
+        iconUrl: "https://cdn.rawgit.com/tmlong/SmartThings/master/resources/images/delegator.png",
+        iconX2Url: "https://cdn.rawgit.com/tmlong/SmartThings/master/resources/images/delegator@2x.png",
+        iconX3Url: "https://cdn.rawgit.com/tmlong/SmartThings/master/resources/images/delegator@2x.png")
 
 preferences {
     page(name: "pageCheck")
