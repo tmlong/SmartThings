@@ -14,7 +14,7 @@ This repository contains SmartApps and Device Handlers for use with the Samsung 
 
 #### [vThing Delegator](https://github.com/tmlong/SmartThings/tree/master/smartapps/tmlong/vthing-delegator.src):
 
- - Create a virtual delegator of things.
+ - Create and manage virtual things for delegating commands.
 
 ### SmartApp Installation
 
@@ -22,6 +22,10 @@ This repository contains SmartApps and Device Handlers for use with the Samsung 
 
 #### [Ecobee Thermostat](https://github.com/tmlong/SmartThings/tree/master/devicetypes/tmlong/ecobee-thermostat.src):
 
+ - An ecobee thermostat for tracking the current climate.
+
 #### [vThing Switch](https://github.com/tmlong/SmartThings/tree/master/devicetypes/tmlong/vthing-switch.src):
+
+ - A virtual thing for delegating switch commands.
 
 ### Device Handler Installation
