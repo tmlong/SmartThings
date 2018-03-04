@@ -95,9 +95,9 @@ def installed() {
 
 def updated() {
     // prevent updated() from being called twice
-    if ((now() - (state.lastUpdated ?: 0)) < 5000) return
+    if ((now() - (atomicState.lastUpdated ?: 0)) < 5000) return
 
-    state.lastUpdated = now()
+    atomicState.lastUpdated = now()
 
     log.info "Updated with settings: ${settings}"
 
@@ -115,7 +115,7 @@ def initializeThing() {
     log.debug "initializeThing()"
 
     // initialize the device id
-    state.deviceId = state.deviceId ?: handlerId
+    atomicState.deviceId = atomicState.deviceId ?: handlerId
 
     // initialize the device handler
     initializeHandler()
@@ -129,7 +129,7 @@ def initializeHandler() {
 
     if (!device) {
         // add the device handler
-        addChildDevice(app.namespace, handlerName, state.deviceId, null, [label: app.label])
+        addChildDevice(app.namespace, handlerName, atomicState.deviceId, null, [label: app.label])
 
         log.debug "initializeHandler() created device: ${device}"
     } else {
@@ -137,7 +137,7 @@ def initializeHandler() {
     }
 
     // delete the device handlers that are no longer used
-    def devicesToDelete = getChildDevices().findAll { it.deviceNetworkId != state.deviceId }
+    def devicesToDelete = getChildDevices().findAll { it.deviceNetworkId != atomicState.deviceId }
 
     if (devicesToDelete) {
         // delete the device handlers
@@ -153,35 +153,34 @@ def initializeHandler() {
 def delegatesHandler(event) {
     log.debug "delegatesHandler() event: ${event.name}, value: ${event.value}, displayName: ${event.displayName}"
 
-    def deviceState = event.value
-
     // check if we are in a working state
-    if (state.working) {
-        state.working[event.deviceId] = event.value
+    if (atomicState.working) {
+        // update the device state
+        def workingState = atomicState.working
+        workingState[event.deviceId] = event.value
+        atomicState.working = workingState
 
         // determine if we are still working
-        def workingCount = state.working.count { k,v -> (v == event.value) }
+        def workingCount = atomicState.working.count { k, v -> (v == event.value) }
 
         log.trace "delegatesHandler() workingCount: ${workingCount}, delegates: ${delegates.size()}"
 
         if (workingCount == delegates.size()) {
-            state.working = null
+            atomicState.working = null
         } else {
             return
         }
-    } else {
-        deviceState = device.determineState(delegates)
     }
 
     // send the device state event
-    device.sendEvent(name: capability.event, value: deviceState)
+    device.sendEvent(name: capability.event, value: device.determineState(delegates))
 }
 
 def doDelegation(command) {
     log.debug "doDelegation() command: ${command}"
 
     // initialize the working state
-    state.working = delegates.collectEntries { [(it.id): it.currentValue(capability.event)] }
+    atomicState.working = delegates.collectEntries { [(it.id): it.currentValue(capability.event)] }
 
     // send the device transition state event
     device.sendEvent(name: capability.event, value: device.determineTransitionState(command))
@@ -206,7 +205,7 @@ def getNextThingName() {
 }
 
 def getDevice() {
-    getChildDevice(state.deviceId)
+    getChildDevice(atomicState.deviceId)
 }
 
 def getDelegates() {
