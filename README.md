@@ -24,6 +24,10 @@ This repository contains SmartApps and Device Handlers for use with the Samsung 
 
  - An ecobee thermostat for tracking the current climate.
 
+#### [vThing Dimmer](https://github.com/tmlong/SmartThings/tree/master/devicetypes/tmlong/vthing-dimmer.src):
+
+ - A virtual thing for delegating dimmer commands.
+
 #### [vThing Switch](https://github.com/tmlong/SmartThings/tree/master/devicetypes/tmlong/vthing-switch.src):
 
  - A virtual thing for delegating switch commands.

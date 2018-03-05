@@ -84,7 +84,7 @@ def pageSettings() {
 
     dynamicPage(name: "pageSettings", title: "", install: false, uninstall: true) {
         section {
-            paragraph "Caution: You are about to uninstall \"${app.name}\" and all of your configured \"vThings\". This action cannot be undone. If you would like to proceed, tap the \"Remove\" button below."
+            paragraph "Caution: You are about to uninstall this app and all of your configured things. This action cannot be undone. If you would like to proceed, tap the \"Remove\" button below."
         }
     }
 }
@@ -161,7 +161,7 @@ def delegatesHandler(event) {
         atomicState.working = workingState
 
         // determine if we are still working
-        def workingCount = atomicState.working.count { k, v -> (v == event.value) }
+        def workingCount = workingState.count { k, v -> (v == event.value) }
 
         log.trace "delegatesHandler() workingCount: ${workingCount}, delegates: ${delegates.size()}"
 
@@ -234,6 +234,12 @@ def getIsParent() {
 
 def get_Capability() {
     [
+        dimmer: [
+            event: "switch",
+            type: "capability.switchLevel",
+            title: "Select Dimmers",
+            handler: "vThing Dimmer"
+        ],
         outlet: [
             event: "switch",
             type: "capability.outlet",
