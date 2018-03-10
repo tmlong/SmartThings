@@ -18,11 +18,11 @@ definition(
         namespace: "tmlong",
         author: "Todd Long",
         description: "A virtual delegator of things.",
-        singleInstance: true,
         category: "SmartThings Labs",
         iconUrl: "https://cdn.rawgit.com/tmlong/SmartThings/master/resources/images/delegator.png",
         iconX2Url: "https://cdn.rawgit.com/tmlong/SmartThings/master/resources/images/delegator@2x.png",
-        iconX3Url: "https://cdn.rawgit.com/tmlong/SmartThings/master/resources/images/delegator@2x.png")
+        iconX3Url: "https://cdn.rawgit.com/tmlong/SmartThings/master/resources/images/delegator@2x.png",
+        singleInstance: true)
 
 preferences {
     page(name: "pageCheck")
@@ -189,6 +189,10 @@ def doDelegation(command) {
     delegates."${command}"()
 }
 
+//
+// Helper functions.
+//
+
 def getCapability() {
     _Capability."${settings.capability}"
 }
@@ -229,7 +233,7 @@ def getHasThings() {
 }
 
 def getIsParent() {
-    (parent == null)
+    !parent
 }
 
 def get_Capability() {

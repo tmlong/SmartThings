@@ -113,16 +113,19 @@ def determineTransitionState(command) {
 //
 // Determine if the switches should be turned on.
 //
-def shouldTurnOn(switches) {
-    log.debug "shouldTurnOn() switches: ${switches}"
+def shouldTurnOn() {
+    log.debug "shouldTurnOn()"
 
-    // determine the switch state
-    def switchState = determineState(switches)
-    def shouldTurnOn = (whenSomeOn && switchState == _SwitchState.SOME)
+    (whenSomeOn && inState(_SwitchState.SOME))
+}
 
-    log.debug "shouldTurnOn() switchState: ${switchState}, shouldTurnOn: ${shouldTurnOn}"
+//
+// Check if the device is in the current switch state.
+//
+def inState(switchState) {
+    log.debug "inState() switchState: ${switchState}"
 
-    shouldTurnOn
+    (switchState == device.currentValue("switch"))
 }
 
 // parse events into attributes
@@ -134,6 +137,9 @@ def parse(String description) {
 def on() {
     log.debug "on()"
 
+    // check if we are already in an on state
+    if (inState(_SwitchState.ON)) return
+
     // turn on the switches
     parent.doDelegation(_SwitchState.ON)
 }
@@ -141,17 +147,16 @@ def on() {
 def off() {
     log.debug "off()"
 
-    if (shouldTurnOn(parent.delegates)) {
-        on()
-    } else {
-        // turn off the switches
-        parent.doDelegation(_SwitchState.OFF)
-    }
+    // check if we are already in an off state
+    if (inState(_SwitchState.OFF)) return
+
+    // turn off the switches
+    shouldTurnOn() ? on() : parent.doDelegation(_SwitchState.OFF)
 }
 
 def refresh() {
     log.debug "refresh()"
 
-    // send the switch state event
+    // send the current state event
     sendEvent(name: "switch", value: determineState(parent.delegates))
 }
