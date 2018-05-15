@@ -22,7 +22,6 @@ metadata {
     }
 
     simulator {
-        // TODO: define status and reply messages here
     }
 
     tiles(scale: 2) {
@@ -130,7 +129,7 @@ def shouldTurnOn() {
 def inState(switchState) {
     log.debug "inState() switchState: ${switchState}"
 
-    (device.currentValue("switch") == switchState)
+    (switchState == device.currentValue("switch"))
 }
 
 // parse events into attributes
@@ -143,7 +142,7 @@ def on() {
     log.debug "on()"
 
     // check if we are already in an on state
-    if (inState(_SwitchState.ON)) return;
+    if (inState(_SwitchState.ON)) return
 
     // turn on the switches
     parent.doDelegation(_SwitchState.ON)
@@ -153,7 +152,7 @@ def off() {
     log.debug "off()"
 
     // check if we are already in an off state
-    if (inState(_SwitchState.OFF)) return;
+    if (inState(_SwitchState.OFF)) return
 
     // turn off the switches
     shouldTurnOn() ? on() : parent.doDelegation(_SwitchState.OFF)
@@ -166,6 +165,6 @@ def setLevel(level, rate) {
 def refresh() {
     log.debug "refresh()"
 
-    // send the switch state event
+    // send the current state event
     sendEvent(name: "switch", value: determineState(parent.delegates))
 }
