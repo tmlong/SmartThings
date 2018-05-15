@@ -238,6 +238,12 @@ def getIsParent() {
 
 def get_Capability() {
     [
+        contact: [
+            event: "contact",
+            type: "capability.contactSensor",
+            title: "Select Contact Sensors",
+            handler: "vThing Contact Sensor"
+        ],
         dimmer: [
             event: "switch",
             type: "capability.switchLevel",
