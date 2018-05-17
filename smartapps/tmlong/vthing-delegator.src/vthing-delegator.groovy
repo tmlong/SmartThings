@@ -177,7 +177,11 @@ def delegatesHandler(event) {
 }
 
 def doDelegation(command) {
-    log.debug "doDelegation() command: ${command}"
+    doDelegation(command, [])
+}
+
+def doDelegation(command, args) {
+    log.debug "doDelegation() command: ${command}, args: ${args}"
 
     // initialize the working state
     atomicState.working = delegates.collectEntries { [(it.id): it.currentValue(capability.event)] }
@@ -186,7 +190,16 @@ def doDelegation(command) {
     device.sendEvent(name: capability.event, value: device.determineTransitionState(command))
 
     // delegate!
-    delegates."${command}"()
+    switch(args?.size()) {
+        case 1:
+            delegates?."${command}"(args[0])
+            break
+        case 2:
+            delegates?."${command}"(args[0], args[1])
+            break
+        default:
+            delegates?."${command}"()
+    }
 }
 
 //

@@ -15,6 +15,7 @@
  */
 metadata {
     definition (name: "vThing Contact Sensor", namespace: "tmlong", author: "Todd Long") {
+        capability "Actuator"
         capability "Contact Sensor"
         capability "Refresh"
         capability "Sensor"
@@ -41,35 +42,26 @@ metadata {
     }
 }
 
-def get_ContactState() {
+def get_SensorState() {
     [ OPEN: "open", CLOSED: "closed", SOME: "someOpen" ]
 }
 
 //
-// Determine the contact state.
+// Determine the sensor state.
 //
-def determineState(contacts) {
-    log.debug "determineState() contacts: ${contacts}"
+def determineState(sensors) {
+    log.debug "determineState() sensors: ${sensors}"
 
-    // determine which contacts are open
-    def contactsOpen = contacts.count { it.currentContact == _ContactState.OPEN }
+    // determine which sensors are opened
+    def sensorsOpen = sensors.count { it.currentContact == _SensorState.OPEN }
 
-    // determine the contact state
-    def contactState = contactsOpen == contacts.size() ? _ContactState.OPEN
-        : (!contactsOpen ? _ContactState.CLOSED : _ContactState.SOME)
+    // determine the sensor state
+    def sensorState = sensorsOpen == sensors.size() ? _SensorState.OPEN
+        : (!sensorsOpen ? _SensorState.CLOSED : _SensorState.SOME)
 
-    log.debug "determineState() contactsOpen: ${contactsOpen} contactState: ${contactState}"
+    log.debug "determineState() sensorsOpen: ${sensorsOpen} sensorState: ${sensorState}"
 
-    contactState
-}
-
-//
-// Check if the device is in the current contact state.
-//
-def inState(contactState) {
-    log.debug "inState() contactState: ${contactState}"
-
-    (contactState == device.currentValue("contact"))
+    sensorState
 }
 
 // parse events into attributes

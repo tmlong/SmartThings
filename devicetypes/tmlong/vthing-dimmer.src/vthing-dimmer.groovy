@@ -158,8 +158,24 @@ def off() {
     shouldTurnOn() ? on() : parent.doDelegation(_SwitchState.OFF)
 }
 
+def setLevel(level) {
+    log.debug "setLevel() level: ${level}"
+
+    // send the current switch level event
+    sendEvent(name: "level", value: level, isStateChange: true)
+
+    // set the switch level
+    parent.doDelegation("setLevel", [level])
+}
+
 def setLevel(level, rate) {
     log.debug "setLevel() level: ${level}, rate: ${rate}"
+
+    // send the current switch level event
+    sendEvent(name: "level", value: level, isStateChange: true)
+
+    // set the switch level
+    parent.doDelegation("setLevel", [level, rate])
 }
 
 def refresh() {
